@@ -1,6 +1,10 @@
 const expenseService = require('../services/expenseService');
 const { createResponse } = require('../utils/response');
 const logger = require('../utils/logger');
+const { Expense } = require('../models');
+
+
+
 
 const expenseController = {
   // Create new expense
@@ -31,15 +35,14 @@ const expenseController = {
         createResponse(true, 'Expenses retrieved successfully', result)
       );
     } catch (error) {
-       console.error('🔥 Expense error:', error.stack || error.message || error);
-  res.status(500).json({
-    success: false,
-    message: 'Internal server error',
-    timestamp: new Date().toISOString(),
-  });
+     logger.error('Failed to get expenses', { error });
+
+   next(error);
     }
   },
 
+
+  
   // Get expense by ID
   async getExpenseById(req, res, next) {
     try {

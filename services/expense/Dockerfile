@@ -12,6 +12,10 @@ RUN npm install --omit=dev
 # Copy application source code
 COPY . .
 
+# Create data directory for persistent storage
+RUN mkdir -p /app/data && \
+    chown -R node:node /app/data
+
 # Create a non-root user for better security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nextjs -u 1001 && \
@@ -21,7 +25,7 @@ RUN addgroup -g 1001 -S nodejs && \
 USER nextjs
 
 # Expose application port
-EXPOSE 3000
+EXPOSE 3001
 
 # Health check to ensure the service is running
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

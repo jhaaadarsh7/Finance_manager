@@ -8,7 +8,7 @@ const Expense = sequelize.define("Expense", {
     primaryKey: true,
   },
   userId: {
-    type: DataTypes.UUID,
+    type: DataTypes.INTEGER,
     allowNull: false,
     field: "user_id",
   },

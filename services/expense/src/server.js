@@ -1,31 +1,43 @@
-const app = require('./app');
-const { sequelize } = require('./config/database');
+const express = require('express');
+const cors = require('cors');
+const { sequelize, initDb } = require('./config/database');
 const logger = require('./utils/logger');
-require('dotenv').config();
+const errorHandler = require('./middleware/errorHandler');
+const expenseRoutes = require('./routes/expenses');
+const categoryRoutes = require('./routes/categories');
 
-const PORT = process.env.PORT || 3000;
+const app = express();
 
-async function startServer() {
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/categories', categoryRoutes);
+
+// Error handling
+app.use(errorHandler);
+
+// Initialize database and start server
+const startServer = async () => {
   try {
+    // Test database connection
     await sequelize.authenticate();
     logger.info('Database connection established successfully');
 
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      logger.info('Database models synchronized');
-    }
+    // Initialize database tables
+    await initDb();
+    logger.info('Database models synchronized');
 
-    // Ensure the server always starts
-    app.listen(PORT, () => {
-      logger.info(`Expense Service running on port ${PORT}`);
-      logger.info(`Environment: ${process.env.NODE_ENV}`);
+    const port = process.env.PORT || 3001;
+    app.listen(port, '0.0.0.0', () => {
+      logger.info(`Expense service running on port ${port}`);
     });
-
   } catch (error) {
-    logger.error(`Failed to start server: ${error.message}`);
-    process.exit(1); // Ensures the app exits on failure
+    logger.error('Failed to start expense service:', error);
+    process.exit(1);
   }
-}
+};
 
-// Execute the function
 startServer();

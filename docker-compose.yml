@@ -1,17 +1,7 @@
-services:
-  # Auth Service
-  auth-service:
-    build: ./services/auth
-    env_file:
-      - ./services/auth/.env
-    ports:
-      - "3000:3000"
-    depends_on:
-      - postgres
-    networks:
-      - backend
+version: '3.8'
 
-  # PostgreSQL (for auth-service)
+services:
+  # PostgreSQL Database
   postgres:
     image: postgres:14
     volumes:
@@ -20,10 +10,71 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: authdb
     networks:
       - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
+  # Auth Service
+  auth-service:
+    build: ./services/auth
+    env_file:
+      - ./services/auth/.env
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    restart: on-failure
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Budget Service
+  budget-service:
+    build: ./services/budget
+    env_file:
+      - ./services/budget/.env
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    volumes:
+      - budget_data:/app/data
+    restart: on-failure
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Expense Service
+  expense-service:
+    build: ./services/expense
+    env_file:
+      - ./services/expense/.env
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    volumes:
+      - expense_data:/app/data
+
+  # pgAdmin
   pgadmin:
     image: dpage/pgadmin4
     ports:
@@ -35,19 +86,11 @@ services:
       - postgres
     networks:
       - backend
-  expense-service:
-    build: ./services/expense
-    env_file:
-      - ./services/expense/.env
-    ports:
-      - "3001:3001"
-    depends_on:
-      - postgres
-    networks:
-      - backend
 
 networks:
   backend:
 
 volumes:
   pgdata:
+  expense_data:
+  budget_data:

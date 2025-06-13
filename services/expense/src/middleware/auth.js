@@ -11,14 +11,15 @@ const authenticateToken = (req, res, next) => {
     );
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
       return res.status(403).json(
         createResponse(false, 'Invalid or expired token', null)
       );
     }
 
-    req.user = user;
+    // Set user object with id from the token
+    req.user = { id: decoded.userId };
     next();
   });
 };
@@ -32,11 +33,11 @@ const optionalAuth = (req, res, next) => {
     return next();
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) {
       req.user = null;
     } else {
-      req.user = user;
+      req.user = { id: decoded.userId };
     }
     next();
   });

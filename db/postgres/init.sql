@@ -1,10 +1,3 @@
-CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password TEXT NOT NULL
-);
-
-
-
-
-
+CREATE DATABASE authdb;
+CREATE DATABASE expensedb;
+CREATE DATABASE finance_budget;

@@ -14,6 +14,12 @@ const {
 // // // Apply authentication to all routes
 router.use(authenticateToken);
 
+// GET /api/expenses/stats - Get expense statistics
+router.get('/stats',
+  validateQuery(expenseQuerySchema),
+  expenseController.getExpenseStats
+);
+
 // GET /api/expenses - Get all expenses with filters
 router.get('/', 
   validateQuery(expenseQuerySchema),
@@ -26,11 +32,6 @@ router.post('/',
   expenseController.createExpense
 );
 
-// GET /api/expenses/stats - Get expense statistics
-router.get('/stats',
-  validateQuery(expenseQuerySchema),
-  expenseController.getExpenseStats
-);
 
 // DELETE /api/expenses/bulk - Bulk delete expenses
 router.delete('/bulk',
