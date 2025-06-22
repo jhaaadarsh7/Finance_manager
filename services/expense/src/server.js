@@ -5,6 +5,7 @@ const logger = require('./utils/logger');
 const errorHandler = require('./middleware/errorHandler');
 const expenseRoutes = require('./routes/expenses');
 const categoryRoutes = require('./routes/categories');
+const RedisPublisher = require('./config/redis');  // Import Redis publisher
 
 const app = express();
 
@@ -19,9 +20,13 @@ app.use('/api/categories', categoryRoutes);
 // Error handling
 app.use(errorHandler);
 
-// Initialize database and start server
+// Initialize database, Redis, and start server
 const startServer = async () => {
   try {
+    // Connect to Redis first
+    await RedisPublisher.connect();
+    logger.info('Redis client connected successfully');
+
     // Test database connection
     await sequelize.authenticate();
     logger.info('Database connection established successfully');
@@ -41,3 +46,4 @@ const startServer = async () => {
 };
 
 startServer();
+

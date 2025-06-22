@@ -1,12 +1,14 @@
-const { Expense, Category } = require('../models');
-const { Op } = require('sequelize');
-const { sequelize } = require('../config/database');
-
+const { Expense, Category } = require("../models");
+const { Op } = require("sequelize");
+const { sequelize } = require("../config/database");
+const ExpenseEventPublisher = require("../../publishers/expenseEventPublisher");
 const expenseService = {
   // Create new expense
   async createExpense(expenseData) {
     const expense = await Expense.create(expenseData);
     return await this.getExpenseById(expense.id, expenseData.userId);
+    await ExpenseEventPublisher.publishCreated(fullExpense);
+    return fullExpense;
   },
 
   // Get expenses with filters and pagination
@@ -20,8 +22,8 @@ const expenseService = {
       minAmount,
       maxAmount,
       search,
-      sortBy = 'date',
-      sortOrder = 'DESC'
+      sortBy = "date",
+      sortOrder = "DESC",
     } = filters;
 
     const offset = (page - 1) * limit;
@@ -46,20 +48,22 @@ const expenseService = {
 
     if (search) {
       where.description = {
-        [Op.iLike]: `%${search}%`
+        [Op.iLike]: `%${search}%`,
       };
     }
 
     const { count, rows } = await Expense.findAndCountAll({
       where,
-      include: [{
-        model: Category,
-        as: 'category',
-        attributes: ['id', 'name', 'color', 'icon']
-      }],
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name", "color", "icon"],
+        },
+      ],
       order: [[sortBy, sortOrder.toUpperCase()]],
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: parseInt(offset),
     });
 
     return {
@@ -68,8 +72,8 @@ const expenseService = {
         total: count,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(count / limit)
-      }
+        totalPages: Math.ceil(count / limit),
+      },
     };
   },
 
@@ -77,18 +81,20 @@ const expenseService = {
   async getExpenseById(id, userId) {
     return await Expense.findOne({
       where: { id, userId },
-      include: [{
-        model: Category,
-        as: 'category',
-        attributes: ['id', 'name', 'color', 'icon']
-      }]
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name", "color", "icon"],
+        },
+      ],
     });
   },
 
   // Update expense
   async updateExpense(id, userId, updateData) {
     const expense = await Expense.findOne({
-      where: { id, userId }
+      where: { id, userId },
     });
 
     if (!expense) {
@@ -96,30 +102,36 @@ const expenseService = {
     }
 
     await expense.update(updateData);
+    const updatedExpense = await this.getExpenseById(id, userId);
+    await ExpenseEventPublisher.publishUpdated(updatedExpense);
     return await this.getExpenseById(id, userId);
   },
 
   // Delete expense
   async deleteExpense(id, userId) {
     const result = await Expense.destroy({
-      where: { id, userId }
+      where: { id, userId },
     });
-    return result > 0;
+    if (result > 0) {
+            await ExpenseEventPublisher.publishDeleted(id, userId);
+      return true;
+    }
+    return false;
   },
 
   // Get expense statistics
-  async getExpenseStats(userId, period = 'month') {
+  async getExpenseStats(userId, period = "month") {
     const now = new Date();
     let startDate;
 
     switch (period) {
-      case 'week':
+      case "week":
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         break;
-      case 'month':
+      case "month":
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         break;
-      case 'year':
+      case "year":
         startDate = new Date(now.getFullYear(), 0, 1);
         break;
       default:
@@ -127,23 +139,24 @@ const expenseService = {
     }
 
     // Total expenses
-    const totalExpenses = await Expense.sum('amount', {
-      where: {
-        userId,
-        date: {
-          [Op.gte]: startDate
-        }
-      }
-    }) || 0;
+    const totalExpenses =
+      (await Expense.sum("amount", {
+        where: {
+          userId,
+          date: {
+            [Op.gte]: startDate,
+          },
+        },
+      })) || 0;
 
     // Count of expenses
     const expenseCount = await Expense.count({
       where: {
         userId,
         date: {
-          [Op.gte]: startDate
-        }
-      }
+          [Op.gte]: startDate,
+        },
+      },
     });
 
     // Average expense amount
@@ -154,21 +167,23 @@ const expenseService = {
       where: {
         userId,
         date: {
-          [Op.gte]: startDate
-        }
+          [Op.gte]: startDate,
+        },
       },
-      include: [{
-        model: Category,
-        as: 'category',
-        attributes: ['id', 'name', 'color', 'icon']
-      }],
-      attributes: [
-        'categoryId',
-        [sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount'],
-        [sequelize.fn('COUNT', sequelize.col('Expense.id')), 'count']
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name", "color", "icon"],
+        },
       ],
-      group: ['categoryId', 'category.id'],
-      order: [[sequelize.fn('SUM', sequelize.col('amount')), 'DESC']]
+      attributes: [
+        "categoryId",
+        [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
+        [sequelize.fn("COUNT", sequelize.col("Expense.id")), "count"],
+      ],
+      group: ["categoryId", "category.id"],
+      order: [[sequelize.fn("SUM", sequelize.col("amount")), "DESC"]],
     });
 
     // Daily expenses for trend analysis
@@ -176,16 +191,16 @@ const expenseService = {
       where: {
         userId,
         date: {
-          [Op.gte]: startDate
-        }
+          [Op.gte]: startDate,
+        },
       },
       attributes: [
-        'date',
-        [sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount'],
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        "date",
+        [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: ['date'],
-      order: [['date', 'ASC']]
+      group: ["date"],
+      order: [["date", "ASC"]],
     });
 
     // Top expenses
@@ -193,16 +208,18 @@ const expenseService = {
       where: {
         userId,
         date: {
-          [Op.gte]: startDate
-        }
+          [Op.gte]: startDate,
+        },
       },
-      include: [{
-        model: Category,
-        as: 'category',
-        attributes: ['id', 'name', 'color', 'icon']
-      }],
-      order: [['amount', 'DESC']],
-      limit: 5
+      include: [
+        {
+          model: Category,
+          as: "category",
+          attributes: ["id", "name", "color", "icon"],
+        },
+      ],
+      order: [["amount", "DESC"]],
+      limit: 5,
     });
 
     return {
@@ -212,26 +229,29 @@ const expenseService = {
       summary: {
         totalExpenses: parseFloat(totalExpenses).toFixed(2),
         expenseCount,
-        averageExpense: parseFloat(averageExpense).toFixed(2)
+        averageExpense: parseFloat(averageExpense).toFixed(2),
       },
-      categoryBreakdown: expensesByCategory.map(item => ({
+      categoryBreakdown: expensesByCategory.map((item) => ({
         category: item.category,
         totalAmount: parseFloat(item.dataValues.totalAmount).toFixed(2),
         count: parseInt(item.dataValues.count),
-        percentage: ((item.dataValues.totalAmount / totalExpenses) * 100).toFixed(1)
+        percentage: (
+          (item.dataValues.totalAmount / totalExpenses) *
+          100
+        ).toFixed(1),
       })),
-      dailyTrend: dailyExpenses.map(item => ({
+      dailyTrend: dailyExpenses.map((item) => ({
         date: item.date,
         totalAmount: parseFloat(item.dataValues.totalAmount).toFixed(2),
-        count: parseInt(item.dataValues.count)
+        count: parseInt(item.dataValues.count),
       })),
-      topExpenses: topExpenses.map(expense => ({
+      topExpenses: topExpenses.map((expense) => ({
         id: expense.id,
         amount: parseFloat(expense.amount).toFixed(2),
         description: expense.description,
         date: expense.date,
-        category: expense.category
-      }))
+        category: expense.category,
+      })),
     };
   },
 
@@ -240,10 +260,10 @@ const expenseService = {
     const result = await Expense.destroy({
       where: {
         id: {
-          [Op.in]: expenseIds
+          [Op.in]: expenseIds,
         },
-        userId
-      }
+        userId,
+      },
     });
     return result;
   },
@@ -255,24 +275,29 @@ const expenseService = {
         userId,
         date: {
           [Op.gte]: new Date(year, 0, 1),
-          [Op.lt]: new Date(year + 1, 0, 1)
-        }
+          [Op.lt]: new Date(year + 1, 0, 1),
+        },
       },
       attributes: [
-        [sequelize.fn('EXTRACT', sequelize.literal('MONTH FROM date')), 'month'],
-        [sequelize.fn('SUM', sequelize.col('amount')), 'totalAmount'],
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        [
+          sequelize.fn("EXTRACT", sequelize.literal("MONTH FROM date")),
+          "month",
+        ],
+        [sequelize.fn("SUM", sequelize.col("amount")), "totalAmount"],
+        [sequelize.fn("COUNT", sequelize.col("id")), "count"],
       ],
-      group: [sequelize.fn('EXTRACT', sequelize.literal('MONTH FROM date'))],
-      order: [[sequelize.fn('EXTRACT', sequelize.literal('MONTH FROM date')), 'ASC']]
+      group: [sequelize.fn("EXTRACT", sequelize.literal("MONTH FROM date"))],
+      order: [
+        [sequelize.fn("EXTRACT", sequelize.literal("MONTH FROM date")), "ASC"],
+      ],
     });
 
-    return expenses.map(expense => ({
+    return expenses.map((expense) => ({
       month: parseInt(expense.dataValues.month),
       totalAmount: parseFloat(expense.dataValues.totalAmount).toFixed(2),
-      count: parseInt(expense.dataValues.count)
+      count: parseInt(expense.dataValues.count),
     }));
-  }
+  },
 };
 
 module.exports = expenseService;

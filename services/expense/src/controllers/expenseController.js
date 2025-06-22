@@ -2,7 +2,7 @@ const expenseService = require('../services/expenseService');
 const { createResponse } = require('../utils/response');
 const logger = require('../utils/logger');
 const { Expense } = require('../models');
-
+const ExpenseEventPublisher = require("../../publishers/expenseEventPublisher")
 
 
 
@@ -14,7 +14,7 @@ const expenseController = {
       const expenseData = { ...req.body, userId };
       
       const expense = await expenseService.createExpense(expenseData);
-      
+      await ExpenseEventPublisher.publishCreated(expense);
       res.status(201).json(
         createResponse(true, 'Expense created successfully', expense)
       );
@@ -30,7 +30,6 @@ const expenseController = {
       const filters = req.query;
       
       const result = await expenseService.getExpenses(userId, filters);
-      
       res.status(200).json(
         createResponse(true, 'Expenses retrieved successfully', result)
       );
@@ -73,7 +72,7 @@ const expenseController = {
       const updateData = req.body;
       
       const expense = await expenseService.updateExpense(id, userId, updateData);
-      
+      ExpenseEventPublisher.publishUpdated(expense);
       if (!expense) {
         return res.status(404).json(
           createResponse(false, 'Expense not found', null)
@@ -101,6 +100,7 @@ const expenseController = {
           createResponse(false, 'Expense not found', null)
         );
       }
+      await ExpenseEventPublisher.publishDeleted(id,userId);
       
       res.status(200).json(
         createResponse(true, 'Expense deleted successfully', null)
