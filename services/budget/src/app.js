@@ -11,6 +11,7 @@ const redisManager = require('./config/redis');
 const expenseEventSubscriber = require('./events/expenseEventSubscriber');
 const authServiceClient = require('./services/authServiceClient');
 const expenseServiceClient = require('./services/expenseServiceClient');
+const healthCheckService = require('./services/healthCheckService');
 const { successResponse, errorResponse } = require('./utils/response');
 const { authenticateToken } = require('./middleware/auth');
 
@@ -30,47 +31,44 @@ app.use((req, res, next) => {
 
 // Health check endpoint with service dependencies
 app.get('/health', async (req, res) => {
-  const healthStatus = {
-    status: 'healthy',
-    service: 'budget-service',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    dependencies: {
-      redis: redisManager.isConnected,
-      authService: 'unknown',
-      expenseService: 'unknown'
-    }
-  };
-
-  // Check dependency health
   try {
-    const authHealth = await authServiceClient.healthCheck();
-    healthStatus.dependencies.authService = authHealth.success ? 'healthy' : 'unhealthy';
+    const healthStatus = await healthCheckService.performHealthCheck();
+    const statusCode = healthStatus.status === 'healthy' ? 200 : 503;
+    res.status(statusCode).json(healthStatus);
   } catch (error) {
-    healthStatus.dependencies.authService = 'unhealthy';
+    res.status(503).json({
+      status: 'unhealthy',
+      service: 'budget-service',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
-
-  try {
-    const expenseHealth = await expenseServiceClient.healthCheck();
-    healthStatus.dependencies.expenseService = expenseHealth.success ? 'healthy' : 'unhealthy';
-  } catch (error) {
-    healthStatus.dependencies.expenseService = 'unhealthy';
-  }
-
-  // Determine overall health
-  const allHealthy = healthStatus.dependencies.redis && 
-                    healthStatus.dependencies.authService === 'healthy' &&
-                    healthStatus.dependencies.expenseService === 'healthy';
-
-  res.status(allHealthy ? 200 : 503).json(healthStatus);
 });
+
+// Quick health check for load balancers
+app.get('/health/quick', async (req, res) => {
+  const quickHealth = await healthCheckService.quickHealthCheck();
+  res.json(quickHealth);
+});
+
+// Deep health check with detailed information
+app.get('/health/deep', async (req, res) => {
+  try {
+    const deepHealth = await healthCheckService.deepHealthCheck();
+    res.json(deepHealth);
+  } catch (error) {
+    res.status(503).json(errorResponse(
+      'Deep health check failed',
+      { error: error.message }
+    ));
+  }
+});
+
+// Import routes
+const budgetRoutes = require('./routes/budgets');
 
 // Protected API routes (require authentication)
-app.use('/api/budgets', authenticateToken, (req, res) => {
-  res.json(successResponse('Budget endpoints with authentication coming soon!', {
-    user: req.user
-  }));
-});
+app.use('/api/budgets', authenticateToken, budgetRoutes);
 
 // Service health endpoint for internal checks
 app.get('/api/health/dependencies', async (req, res) => {
