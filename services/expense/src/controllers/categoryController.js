@@ -1,5 +1,6 @@
 const categoryService = require('../services/categoryService');
 const { createResponse } = require('../utils/response');
+const CategoryEventPublisher = require("../../publishers/categoryEventPublisher");
 
 const categoryController = {
   // Get all categories
@@ -42,6 +43,9 @@ const categoryController = {
       const categoryData = req.body;
       const category = await categoryService.createCategory(categoryData);
       
+      // Publish event after category creation
+      await CategoryEventPublisher.publishCreated(category);
+
       res.status(201).json(
         createResponse(true, 'Category created successfully', category)
       );
@@ -63,7 +67,10 @@ const categoryController = {
           createResponse(false, 'Category not found', null)
         );
       }
-      
+
+      // Publish event after update
+      await CategoryEventPublisher.publishUpdated(category);
+
       res.status(200).json(
         createResponse(true, 'Category updated successfully', category)
       );
@@ -84,7 +91,10 @@ const categoryController = {
           createResponse(false, 'Category not found', null)
         );
       }
-      
+
+      // Publish event after delete
+      await CategoryEventPublisher.publishDeleted(id);
+
       res.status(200).json(
         createResponse(true, 'Category deleted successfully', null)
       );
